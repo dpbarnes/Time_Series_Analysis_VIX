@@ -1,0 +1,246 @@
+---
+title: "VIX_additional"
+author: "David Barnes"
+date: "3/12/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(quantmod)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(fBasics)
+library(lubridate)
+library(tsbox)
+library(fpp)
+```
+
+```{r}
+VIX_three_year <-read.csv("C:/Users/dbarn/Desktop/MSBA21/Time_Series/VIX_threeyear.csv")#1/1/2016-12/1/2018
+VIX_year <-read.csv("C:/Users/dbarn/Desktop/MSBA21/Time_Series/VIX_year.csv") #1/4/2016 - 12/30/2016
+```
+
+
+```{r}
+str(VIX_three_year) #observe dataframe, need to change chr to date
+str(VIX_year)#observe dataframe, need to change chr to date
+
+VIX_three_year$Date <- as.Date.character(VIX_three_year$Date,"%m/%d/%Y")
+str(VIX_three_year)
+
+VIX_year$Date <- as.Date.character(VIX_year$Date,"%m/%d/%Y")
+str(VIX_year)
+```
+
+```{r}
+print(basicStats(VIX_year$Adj.Close)) #view stats of adj. price
+print(basicStats(VIX_three_year$Adj.Close)) #view stats of adj. price
+```
+
+```{r}
+#exploratory visualizations Report
+ggAcf(VIX_year$Adj.Close) 
+ggAcf(VIX_three_year$Adj.Close)
+```
+
+```{r}
+#additional exploratory analysis
+print(normalTest(VIX_year$Adj.Close, method = 'jb')) #p value very small = not normally distributed
+print(normalTest(VIX_three_year$Adj.Close, method = 'jb' )) #p value very small = not normally distributed
+```
+
+
+```{r}
+#split into training and testing data for daily, weekly, and monthly Report
+
+wholeyearts <- ts(VIX_year[,2],start=c(2016,1), frequency = 365) #turn into ts
+wholethreeyearts <- ts(VIX_three_year[,2],start=c(2016,1), frequency = 12) #turn into ts
+
+adf.test(wholeyearts) #not stationary
+adf.test(wholethreeyearts) #not stationary
+
+ggAcf(wholeyearts)
+ggAcf(wholethreeyearts)
+
+VIX_yeartrain <-window(wholeyearts, end = 2016.55)
+VIX_yeartest <-window(wholeyearts, start = 2016.56)
+
+VIX_3yeartrain <- window(wholethreeyearts, end = 2018.3)
+VIX_3yeartest <- window(wholethreeyearts, start = 2018.4)
+
+autoplot(VIX_yeartrain) + autolayer(VIX_yeartest) #making sure everything is fine
+autoplot(VIX_3yeartrain) + autolayer(VIX_3yeartest) #making sure everything is fine
+```
+
+```{r}
+h <- length(VIX_yeartest)
+fc1yearly <- meanf(VIX_yeartrain, h =h)
+fc2yearly <-naive(VIX_yeartrain, h = h)
+fc3yearly <-snaive(VIX_yeartrain, h = h)
+fit1yearly <-ets(VIX_yeartrain)
+fc4yearly <-forecast(fit1yearly, h = h)
+fc5yearly <-rwf(VIX_yeartrain, h = h, drift = TRUE)
+accuracy(fc1yearly, VIX_yeartest)
+accuracy(fc2yearly, VIX_yeartest)
+accuracy(fc3yearly, VIX_yeartest)
+accuracy(fc4yearly, VIX_yeartest)
+accuracy(fc5yearly, VIX_yeartest)
+
+#drift is the best for year test
+
+h1 <- length(VIX_3yeartest)
+fc13yearly <- meanf(VIX_3yeartrain, h =h1)
+fc23yearly <-naive(VIX_3yeartrain, h = h1) #tech best for given
+fc33yearly <-snaive(VIX_3yeartrain, h = h1)
+fit13yearly <-ets(VIX_3yeartrain)
+fc43yearly <-forecast(fit13yearly, h = h1)
+fc53yearly <-rwf(VIX_3yeartrain, h = h1, drift = TRUE)
+accuracy(fc13yearly, VIX_3yeartest)
+accuracy(fc23yearly, VIX_3yeartest)
+accuracy(fc33yearly, VIX_3yeartest)
+accuracy(fc43yearly, VIX_3yeartest)
+accuracy(fc53yearly, VIX_3yeartest)
+
+autoplot(VIX_yeartrain) + autolayer(fc1yearly$mean, series = "Meanf") + autolayer(fc2yearly$mean, series = "Naive") + autolayer(fc3yearly$mean, series = "Seasonal Naive") + autolayer(fc4yearly$mean, series = "ets") + autolayer(fc5yearly$mean, series = "Drift") + autolayer(VIX_yeartest, series = "Actual") #benchmarks
+
+autoplot(VIX_3yeartrain) + autolayer(fc13yearly$mean, series = "Meanf") + autolayer(fc23yearly$mean, series = "Naive") + autolayer(fc33yearly$mean, series = "Seasonal Naive") + autolayer(fc43yearly$mean, series = "ets") +autolayer(fc53yearly$mean, series = "Drift") + autolayer(VIX_3yeartest, series = "Actual") #benchmarks
+```
+```{r}
+ndiffs(VIX_yeartrain) #states it needs one diff to be stationary
+ndiffs(VIX_yeartrain) #states it needs one diff to be stationary
+```
+
+```{r}
+diff1 <-diff(wholeyearts)
+Acf(diff1)
+Pacf(diff1)
+#can't tell which ar or ma to explore, going to take second diff
+
+diff11 <- diff(diff(wholeyearts))
+Acf(diff11) #MA(1)
+Pacf(diff11) #AR(5)
+
+diff31 <- diff(wholethreeyearts)
+autoplot(diff31)
+Acf(diff31)
+Pacf(diff31)
+
+diff32 <- diff(diff(wholethreeyearts))
+
+Acf(diff32)#MA1
+Pacf(diff32)#AR1
+
+adf.test(diff1) #stationary p value = .01, year data, differenced once
+adf.test(diff31) #not stationary , p value of .4724, three year data, differenced once
+
+adf.test(diff11) #stationary p value = 0.01, year data, differenced twice
+adf.test(diff32) #stationary p value = 0.044, three year data, differenced twice
+
+```
+
+```{r}
+
+#one year modeling
+
+fit1_ar<- Arima(VIX_yeartrain, order= c(5,1,0)) #Choose AR(5), diff 1
+summary(fit1_ar) #AICC 722.5
+ggAcf(fit1_ar$residuals)
+
+Box.test(fit1_ar$residuals, lag=10, fitdf=5, type="Ljung") #p-value .7821
+
+fit1_ar2<- Arima(VIX_yeartrain, order= c(3,1,0)) #lets switch around to see if we can get lower aicc
+summary(fit1_ar2) #AICC 720.35
+ggAcf(fit1_ar2$residuals)
+
+Box.test(fit1_ar2$residuals, lag=10, fitdf=3, type="Ljung") #p-value of .7479, going with this model as lowest AICC and resid still good. Let's test MA
+
+fit1_ma<-Arima(VIX_yeartrain, order= c(0,1,1)) #Choose MA(1), diff 1
+summary(fit1_ma) #AICC 716.35
+ggAcf(fit1_ma$residuals)
+
+Box.test(fit1_ar$residuals, lag=10, fitdf=1, type="Ljung") #p-value .9819
+
+fit1_ma2<- Arima(VIX_yeartrain, order= c(0,1,3)) #lets switch around to see if we can get lower aicc
+summary(fit1_ma2) #AICC 720.15
+
+ #MA(1) provides lowest AICC of 716.35, looks like MA(1) works best overall.
+```
+
+
+```{r}
+#three years modeling
+
+fit2_ar<- Arima(VIX_3yeartrain, order= c(1,2,0)) #Choose AR(1), diff 2
+summary(fit2_ar) #AICC 135.35
+ggAcf(fit2_ar$residuals)
+
+Box.test(fit2_ar$residuals, lag=5, fitdf=1, type="Ljung") #p-value .0851 != good
+
+fit2_ar2<- Arima(VIX_3yeartrain, order= c(3,2,0)) #lets switch around to see if we can residual goal
+summary(fit2_ar2) #AICC 127.58
+ggAcf(fit2_ar2$residuals)
+
+Box.test(fit2_ar2$residuals, lag=5, fitdf=3, type="Ljung") #p-value of .1941, going with this model as lowest AICC and resid good. Let's test MA
+
+
+
+fit2_ma<- Arima(VIX_3yeartrain, order= c(0,2,1)) #Choose MA(1), diff 2
+summary(fit2_ma) #AICC 130.48
+ggAcf(fit2_ma$residuals)
+
+Box.test(fit2_ma$residuals, lag=5, fitdf=1, type="Ljung") #p-value .02 != good
+
+fit2_ma2<- Arima(VIX_3yeartrain, order= c(0,2,4)) #lets switch around to see if we can residual goal
+summary(fit2_ma2) #AICC 133.56
+ggAcf(fit2_ma2$residuals)
+
+Box.test(fit2_ma2$residuals, lag=5, fitdf=4, type="Ljung") #p-value of .18, MA(3)
+
+ #AR(3) diff 2 looks best for three year data
+
+```
+
+```{r}
+auto.arima(VIX_yeartrain, seasonal = FALSE) # 5,1,0 was the given model for auto.arima. This was one of our options. However, MA(1) has lower AICC
+auto.arima(VIX_3yeartrain, seasonal = FALSE) #1,0,0 was the given model for auto.arima. This was one of our options. However, AR(3) has lowest.
+```
+
+```{r}
+#One year data forecasting
+
+
+fcyear1<-forecast(fit1_ma,h=52)
+accuracy(fcyear1$mean,VIX_yeartest) #compute forecast accuracy on test set for fc3
+fc2year1 <-forecast(fit1_ar, h = 52)
+accuracy(fc2year1$mean, VIX_yeartest)
+
+#ma(1) best model still
+
+checkresiduals(fcyear1)
+
+```
+
+```{r}
+plot(fcyear1, include = 100) #have to include at least 14 (test set dp)
+lines(VIX_yeartest, col = "green")
+```
+
+
+```{r}
+#Three year data forecasting
+
+
+fcyear2<-forecast(fit2_ar2,h=10)
+accuracy(fcyear2$mean,VIX_3yeartest) #compute forecast accuracy on test set for fc3
+checkresiduals(fcyear2)
+```
+```{r}
+plot(fcyear2, include = 100) #have to include at least 14 (test set dp)
+lines(VIX_3yeartest, col = "green")
+```
+
